@@ -1,5 +1,4 @@
 pyrogram
 tgcrypto
-aiosmtplib
 aiohttp
 python-dotenv
