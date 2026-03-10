@@ -2,7 +2,7 @@ import os
 import asyncio
 import re
 import base64
-from pyrogram import Client, filters, idle, enums
+from pyrogram import Client, filters, idle
 from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 import aiohttp
 from aiohttp import web
@@ -23,12 +23,12 @@ users_data = {}
 
 # --- Keyboards ---
 file_choice_kb = ReplyKeyboardMarkup(
-    [[KeyboardButton("Yes"), KeyboardButton("No")]], 
+    [[KeyboardButton("Yes"), KeyboardButton("No, Continue")]], 
     resize_keyboard=True, placeholder="Attach a file?"
 )
 
 more_files_kb = ReplyKeyboardMarkup(
-    [[KeyboardButton("Yes"), KeyboardButton("Continue")]], 
+    [[KeyboardButton("Yes"), KeyboardButton("No, Continue")]], 
     resize_keyboard=True, placeholder="Attach another?"
 )
 
@@ -38,12 +38,15 @@ def reset_user(user_id):
         # Clean up local files to save disk space
         for file in users_data[user_id].get('files', []):
             if os.path.exists(file):
-                os.remove(file)
+                try:
+                    os.remove(file)
+                except:
+                    pass
         del users_data[user_id]
 
 # --- The Hidden Background Engine ---
 async def dispatch_email_background(user_id, data):
-    """This runs silently in the background, completely detached from the user UI."""
+    """This runs silently in the background. The UI doesn't wait for it!"""
     try:
         attachments = []
         for file_path in data.get('files', []):
@@ -53,7 +56,7 @@ async def dispatch_email_background(user_id, data):
             # 15MB Safety check
             if os.path.getsize(file_path) > 15 * 1024 * 1024:
                 print(f"File too large to send for user {user_id}")
-                return # Give up silently
+                return 
                 
             file_name = os.path.basename(file_path)
             with open(file_path, "rb") as f:
@@ -83,34 +86,27 @@ async def dispatch_email_background(user_id, data):
                 headers=headers,
                 timeout=30 
             ) as response:
-                print(f"Background API Status: {response.status}")
+                print(f"Background Delivery Status: {response.status}")
 
     except Exception as e:
-        print(f"Background Engine Crash: {e}")
+        print(f"Background Engine Error: {e}")
     finally:
-        # We only delete the user's files AFTER the background task finishes!
+        # Delete the files after sending
         reset_user(user_id)
 
 
 # --- The UI Controller ---
-async def send_email_ui(client, user_id, chat_id, message):
+async def send_email_ui(user_id, message):
     data = users_data.get(user_id)
     if not data:
         return
     
-    # 1. Typing Animation
-    await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
-    
-    # 2. Loading Message
-    status_msg = await message.reply("Sending Email Securely... ⏳", reply_markup=ReplyKeyboardRemove())
-    
-    # 3. 🪄 MAGIC: Throw the actual sending process into the background and forget about it!
-    # We pass a copy of the data so the UI doesn't interfere with the background task.
+    # 1. Instantly throw the API work to the background
     asyncio.create_task(dispatch_email_background(user_id, data.copy()))
     
-    # 4. The Fake Success (Always executes smoothly after exactly 2 seconds)
-    await asyncio.sleep(2)
-    await status_msg.edit_text("Sent Successfully 🥳🚀")
+    # 2. Skip the "Sending..." message entirely!
+    # Instantly drop the success message and remove the keyboard.
+    await message.reply("<b>Sent Successfully 🥳🚀</b>", reply_markup=ReplyKeyboardRemove())
 
 
 # --- Bot Handlers ---
@@ -157,9 +153,9 @@ async def handle_text(client, message):
         if text == "Yes":
             users_data[user_id]['step'] = 'waiting_for_file_upload'
             await message.reply("Send File You Want To Attach🙌", reply_markup=ReplyKeyboardRemove())
-        elif text == "No" or text == "Continue":
-            # Call the new UI function!
-            await send_email_ui(client, user_id, message.chat.id, message)
+        elif text == "No, Continue":
+            # Call the UI function directly!
+            await send_email_ui(user_id, message)
         else:
             await message.reply("Please use the menu buttons below.")
 
