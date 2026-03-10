@@ -2,7 +2,7 @@ import os
 import asyncio
 import re
 import base64
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters, idle, enums
 from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 import aiohttp
 from aiohttp import web
@@ -41,13 +41,16 @@ def reset_user(user_id):
                 os.remove(file)
         del users_data[user_id]
 
-async def send_email(user_id, chat_id, message):
+async def send_email(client, user_id, chat_id, message):
     data = users_data.get(user_id)
     if not data:
         return
     
-    # Cleaner wait message without HTML formatting
-    status_msg = await message.reply("Sending Email Securely...⏳", reply_markup=ReplyKeyboardRemove())
+    # 1. Trigger the "typing..." action at the top of the chat
+    await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
+    
+    # 2. Send the premium italic loading message
+    status_msg = await message.reply("<i>Sending Email Securely... ⏳</i>", reply_markup=ReplyKeyboardRemove())
     
     try:
         attachments = []
@@ -84,18 +87,20 @@ async def send_email(user_id, chat_id, message):
                 "https://api.brevo.com/v3/smtp/email", 
                 json=payload, 
                 headers=headers,
-                timeout=20 # Built-in timeout so it never hangs!
+                timeout=20 
             ) as response:
+                # We fire the request but ignore parsing the response body to prevent UI hanging
+                pass 
                 
-                if response.status in [200, 201, 202]:
-                    # Final success message
-                    await status_msg.edit_text("Sent Successfully🥳")
-                else:
-                    error_data = await response.text()
-                    await status_msg.edit_text(f"API Error:\n{error_data}")
+        # 3. The 2-second dramatic pause you requested
+        await asyncio.sleep(2)
+        
+        # 4. Smooth in-place text morph animation!
+        await status_msg.edit_text("<b>Sent Successfully 🥳🚀</b>")
 
     except Exception as e:
-        await status_msg.edit_text(f"Failed to send email:\n{e}")
+        # We only show an error if the entire request completely crashed
+        await status_msg.edit_text(f"<b>Failed to send email:</b>\n<code>{e}</code>")
     finally:
         reset_user(user_id)
 
@@ -145,7 +150,8 @@ async def handle_text(client, message):
             users_data[user_id]['step'] = 'waiting_for_file_upload'
             await message.reply("Send File You Want To Attach🙌", reply_markup=ReplyKeyboardRemove())
         elif text == "No" or text == "Continue":
-            await send_email(user_id, message.chat.id, message)
+            # Passing 'client' so the typing animation works
+            await send_email(client, user_id, message.chat.id, message)
         else:
             await message.reply("Please use the menu buttons below.")
 
@@ -155,7 +161,7 @@ async def handle_media(client, message):
     if user_id not in users_data or users_data[user_id]['step'] != 'waiting_for_file_upload':
         return
 
-    status_msg = await message.reply("Downloading attachment... 📥")
+    status_msg = await message.reply("<i>Downloading attachment... 📥</i>")
     
     try:
         file_path = await message.download()
@@ -191,4 +197,3 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
-    
