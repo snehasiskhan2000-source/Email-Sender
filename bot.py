@@ -1,10 +1,10 @@
 import os
 import asyncio
 import re
+import base64
 from pyrogram import Client, filters, idle
 from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from email.message import EmailMessage
-import aiosmtplib
+import aiohttp
 from aiohttp import web
 
 # --- Configuration ---
@@ -12,11 +12,9 @@ API_ID = os.environ.get("API_ID")
 API_HASH = os.environ.get("API_HASH")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
-# SMTP Config
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "ceo@techbittu.in")
-SENDER_PASSWORD = os.environ.get("SENDER_PASSWORD") # Remember to use an App Password
-SMTP_SERVER = os.environ.get("SMTP_SERVER", "smtp.hostinger.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", 465))
+# API Config
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "noreply@mailbot.techbittu.in")
+EMAIL_API_KEY = os.environ.get("EMAIL_API_KEY") 
 
 app = Client("premium_mailer_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -48,33 +46,52 @@ async def send_email(user_id, chat_id, message):
     if not data:
         return
     
-    status_msg = await message.reply("<i>Sending email securely... ⏳</i>", reply_markup=ReplyKeyboardRemove())
+    status_msg = await message.reply("<i>Sending email securely via API... ⏳</i>", reply_markup=ReplyKeyboardRemove())
     
     try:
-        msg = EmailMessage()
-        msg['Subject'] = data['subject']
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = data['to']
-        msg.set_content(data['body'])
-
-        # Attach all uploaded files
+        attachments = []
+        # Convert files to Base64 for the API
         for file_path in data.get('files', []):
             file_name = os.path.basename(file_path)
-            with open(file_path, 'rb') as f:
-                file_data = f.read()
-            msg.add_attachment(file_data, maintype='application', subtype='octet-stream', filename=file_name)
+            with open(file_path, "rb") as f:
+                encoded_string = base64.b64encode(f.read()).decode("utf-8")
+                attachments.append({
+                    "name": file_name,
+                    "content": encoded_string
+                })
 
-        # Dispatch via async SMTP
-        await aiosmtplib.send(
-            msg,
-            hostname=SMTP_SERVER,
-            port=SMTP_PORT,
-            use_tls=True,
-            username=SENDER_EMAIL,
-            password=SENDER_PASSWORD
-        )
+        # Build the JSON payload for Brevo
+        payload = {
+            "sender": {"name": "Premium Bot", "email": SENDER_EMAIL},
+            "to": [{"email": data['to']}],
+            "subject": data['subject'],
+            "textContent": data['body']
+        }
         
-        await status_msg.edit_text("<b>Email successfully sent! 🚀💀</b>")
+        if attachments:
+            payload["attachment"] = attachments
+
+        headers = {
+            "accept": "application/json",
+            "api-key": EMAIL_API_KEY,
+            "content-type": "application/json"
+        }
+
+        # Dispatch via async HTTP request
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://api.brevo.com/v3/smtp/email", 
+                json=payload, 
+                headers=headers,
+                timeout=20 # Built-in timeout so it never hangs!
+            ) as response:
+                
+                if response.status in [200, 201, 202]:
+                    await status_msg.edit_text("<b>Email successfully delivered! 🚀💀</b>")
+                else:
+                    error_data = await response.text()
+                    await status_msg.edit_text(f"<b>API Error:</b>\n<code>{error_data}</code>")
+
     except Exception as e:
         await status_msg.edit_text(f"<b>Failed to send email:</b>\n<code>{e}</code>")
     finally:
@@ -148,7 +165,6 @@ async def handle_media(client, message):
     except Exception as e:
         await status_msg.edit_text("Error downloading file. Please try again.")
 
-
 # --- Web Server for UptimeRobot ---
 async def web_handler(request):
     return web.Response(text="Premium Bot is alive and well! 💀")
@@ -165,16 +181,12 @@ async def start_webserver():
 
 # --- Main Execution ---
 async def main():
-    # Fire up the web server for Render
     await start_webserver()
-    # Fire up the Pyrogram bot
     await app.start()
-    print("Bot is up and running! 💀")
-    # Keep the event loop running
+    print("API-Powered Bot is up and running! 💀")
     await idle()
-    # Graceful shutdown
     await app.stop()
 
 if __name__ == "__main__":
     app.run(main())
-  
+        
