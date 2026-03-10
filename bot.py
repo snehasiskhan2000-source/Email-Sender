@@ -46,16 +46,26 @@ async def send_email(client, user_id, chat_id, message):
     if not data:
         return
     
-    # 1. Trigger the "typing..." action at the top of the chat
+    # Trigger the "typing..." animation at the top of the chat
     await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
     
-    # 2. Send the premium italic loading message
-    status_msg = await message.reply("<i>Sending Email Securely... ⏳</i>", reply_markup=ReplyKeyboardRemove())
+    # ⚠️ NO HTML TAGS HERE to prevent silent Telegram API crashes!
+    status_msg = await message.reply("Sending Email Securely... ⏳", reply_markup=ReplyKeyboardRemove())
     
     try:
         attachments = []
-        # Convert files to Base64 for the API
+        # Process and Base64 encode all attached files
         for file_path in data.get('files', []):
+            if not os.path.exists(file_path):
+                continue
+                
+            # Safety check: Prevent files over 15MB from crashing the API
+            file_size = os.path.getsize(file_path)
+            if file_size > 15 * 1024 * 1024:
+                await status_msg.edit_text("Error: A file is too large! Email APIs only allow up to 15MB. 🛑")
+                reset_user(user_id)
+                return
+            
             file_name = os.path.basename(file_path)
             with open(file_path, "rb") as f:
                 encoded_string = base64.b64encode(f.read()).decode("utf-8")
@@ -87,20 +97,24 @@ async def send_email(client, user_id, chat_id, message):
                 "https://api.brevo.com/v3/smtp/email", 
                 json=payload, 
                 headers=headers,
-                timeout=20 
+                timeout=30 # Increased timeout for handling images/files
             ) as response:
-                # We fire the request but ignore parsing the response body to prevent UI hanging
-                pass 
                 
-        # 3. The 2-second dramatic pause you requested
-        await asyncio.sleep(2)
-        
-        # 4. Smooth in-place text morph animation!
-        await status_msg.edit_text("<b>Sent Successfully 🥳🚀</b>")
+                response_text = await response.text()
+                
+                if response.status in [200, 201, 202, 204]:
+                    # Short delay for the premium UI feel, then success!
+                    await asyncio.sleep(1)
+                    await status_msg.edit_text("Sent Successfully 🥳🚀")
+                else:
+                    # Print the exact error to Render logs so you can debug it
+                    print(f"Brevo API Error: {response_text}")
+                    await status_msg.edit_text("API Error! Check your Render Logs to see the exact issue. 💀")
 
     except Exception as e:
-        # We only show an error if the entire request completely crashed
-        await status_msg.edit_text(f"<b>Failed to send email:</b>\n<code>{e}</code>")
+        # Print Python errors directly to the logs
+        print(f"Python Crash: {e}")
+        await status_msg.edit_text("A system error occurred! Check your Render Logs. 😶‍🌫️")
     finally:
         reset_user(user_id)
 
@@ -146,11 +160,12 @@ async def handle_text(client, message):
         await message.reply("Are U Want To Send Any Files?", reply_markup=file_choice_kb)
 
     elif step in ['waiting_file_choice', 'waiting_more_files_choice']:
+        # Your bottom menu logic dictates the UI flow!
         if text == "Yes":
             users_data[user_id]['step'] = 'waiting_for_file_upload'
             await message.reply("Send File You Want To Attach🙌", reply_markup=ReplyKeyboardRemove())
         elif text == "No" or text == "Continue":
-            # Passing 'client' so the typing animation works
+            # Pass 'client' so the typing animation can trigger
             await send_email(client, user_id, message.chat.id, message)
         else:
             await message.reply("Please use the menu buttons below.")
@@ -161,7 +176,7 @@ async def handle_media(client, message):
     if user_id not in users_data or users_data[user_id]['step'] != 'waiting_for_file_upload':
         return
 
-    status_msg = await message.reply("<i>Downloading attachment... 📥</i>")
+    status_msg = await message.reply("Downloading attachment... 📥")
     
     try:
         file_path = await message.download()
@@ -171,6 +186,7 @@ async def handle_media(client, message):
         await status_msg.delete()
         await message.reply("Are U Want To Attach More Files?", reply_markup=more_files_kb)
     except Exception as e:
+        print(f"Download Error: {e}")
         await status_msg.edit_text("Error downloading file. Please try again.")
 
 # --- Web Server for UptimeRobot ---
