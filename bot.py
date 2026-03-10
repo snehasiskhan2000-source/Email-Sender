@@ -46,7 +46,8 @@ async def send_email(user_id, chat_id, message):
     if not data:
         return
     
-    status_msg = await message.reply("<i>Sending email securely via API... ⏳</i>", reply_markup=ReplyKeyboardRemove())
+    # Cleaner wait message without HTML formatting
+    status_msg = await message.reply("Sending Email Securely...⏳", reply_markup=ReplyKeyboardRemove())
     
     try:
         attachments = []
@@ -62,7 +63,7 @@ async def send_email(user_id, chat_id, message):
 
         # Build the JSON payload for Brevo
         payload = {
-            "sender": {"name": "Premium Bot", "email": SENDER_EMAIL},
+            "sender": {"name": "Premium Mailer", "email": SENDER_EMAIL},
             "to": [{"email": data['to']}],
             "subject": data['subject'],
             "textContent": data['body']
@@ -87,13 +88,14 @@ async def send_email(user_id, chat_id, message):
             ) as response:
                 
                 if response.status in [200, 201, 202]:
-                    await status_msg.edit_text("<b>Email successfully delivered! 🚀💀</b>")
+                    # Final success message
+                    await status_msg.edit_text("Sent Successfully🥳")
                 else:
                     error_data = await response.text()
-                    await status_msg.edit_text(f"<b>API Error:</b>\n<code>{error_data}</code>")
+                    await status_msg.edit_text(f"API Error:\n{error_data}")
 
     except Exception as e:
-        await status_msg.edit_text(f"<b>Failed to send email:</b>\n<code>{e}</code>")
+        await status_msg.edit_text(f"Failed to send email:\n{e}")
     finally:
         reset_user(user_id)
 
@@ -153,7 +155,7 @@ async def handle_media(client, message):
     if user_id not in users_data or users_data[user_id]['step'] != 'waiting_for_file_upload':
         return
 
-    status_msg = await message.reply("<i>Downloading attachment... 📥</i>")
+    status_msg = await message.reply("Downloading attachment... 📥")
     
     try:
         file_path = await message.download()
@@ -189,4 +191,4 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
-        
+    
