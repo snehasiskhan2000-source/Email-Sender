@@ -117,7 +117,7 @@ async def start_command(client, message):
     reset_user(user_id)
     users_data[user_id] = {'step': 'waiting_email', 'files': []}
     await message.reply(
-        "Welcome to the Premium Mailer 💀\n\nSend Receiver's Email✉️", 
+        "Send Receiver's Email🫣", 
         reply_markup=ReplyKeyboardRemove()
     )
 
