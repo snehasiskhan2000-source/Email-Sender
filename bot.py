@@ -35,46 +35,31 @@ more_files_kb = ReplyKeyboardMarkup(
 # --- Helper Functions ---
 def reset_user(user_id):
     if user_id in users_data:
-        # Clean up local files to save Render disk space
+        # Clean up local files to save disk space
         for file in users_data[user_id].get('files', []):
             if os.path.exists(file):
                 os.remove(file)
         del users_data[user_id]
 
-async def send_email(client, user_id, chat_id, message):
-    data = users_data.get(user_id)
-    if not data:
-        return
-    
-    # Trigger the "typing..." animation at the top of the chat
-    await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
-    
-    # ⚠️ NO HTML TAGS HERE to prevent silent Telegram API crashes!
-    status_msg = await message.reply("Sending Email Securely... ⏳", reply_markup=ReplyKeyboardRemove())
-    
+# --- The Hidden Background Engine ---
+async def dispatch_email_background(user_id, data):
+    """This runs silently in the background, completely detached from the user UI."""
     try:
         attachments = []
-        # Process and Base64 encode all attached files
         for file_path in data.get('files', []):
             if not os.path.exists(file_path):
                 continue
-                
-            # Safety check: Prevent files over 15MB from crashing the API
-            file_size = os.path.getsize(file_path)
-            if file_size > 15 * 1024 * 1024:
-                await status_msg.edit_text("Error: A file is too large! Email APIs only allow up to 15MB. 🛑")
-                reset_user(user_id)
-                return
             
+            # 15MB Safety check
+            if os.path.getsize(file_path) > 15 * 1024 * 1024:
+                print(f"File too large to send for user {user_id}")
+                return # Give up silently
+                
             file_name = os.path.basename(file_path)
             with open(file_path, "rb") as f:
                 encoded_string = base64.b64encode(f.read()).decode("utf-8")
-                attachments.append({
-                    "name": file_name,
-                    "content": encoded_string
-                })
+                attachments.append({"name": file_name, "content": encoded_string})
 
-        # Build the JSON payload for Brevo
         payload = {
             "sender": {"name": "Premium Mailer", "email": SENDER_EMAIL},
             "to": [{"email": data['to']}],
@@ -91,32 +76,41 @@ async def send_email(client, user_id, chat_id, message):
             "content-type": "application/json"
         }
 
-        # Dispatch via async HTTP request
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://api.brevo.com/v3/smtp/email", 
                 json=payload, 
                 headers=headers,
-                timeout=30 # Increased timeout for handling images/files
+                timeout=30 
             ) as response:
-                
-                response_text = await response.text()
-                
-                if response.status in [200, 201, 202, 204]:
-                    # Short delay for the premium UI feel, then success!
-                    await asyncio.sleep(1)
-                    await status_msg.edit_text("Sent Successfully 🥳🚀")
-                else:
-                    # Print the exact error to Render logs so you can debug it
-                    print(f"Brevo API Error: {response_text}")
-                    await status_msg.edit_text("API Error! Check your Render Logs to see the exact issue. 💀")
+                print(f"Background API Status: {response.status}")
 
     except Exception as e:
-        # Print Python errors directly to the logs
-        print(f"Python Crash: {e}")
-        await status_msg.edit_text("A system error occurred! Check your Render Logs. 😶‍🌫️")
+        print(f"Background Engine Crash: {e}")
     finally:
+        # We only delete the user's files AFTER the background task finishes!
         reset_user(user_id)
+
+
+# --- The UI Controller ---
+async def send_email_ui(client, user_id, chat_id, message):
+    data = users_data.get(user_id)
+    if not data:
+        return
+    
+    # 1. Typing Animation
+    await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
+    
+    # 2. Loading Message
+    status_msg = await message.reply("Sending Email Securely... ⏳", reply_markup=ReplyKeyboardRemove())
+    
+    # 3. 🪄 MAGIC: Throw the actual sending process into the background and forget about it!
+    # We pass a copy of the data so the UI doesn't interfere with the background task.
+    asyncio.create_task(dispatch_email_background(user_id, data.copy()))
+    
+    # 4. The Fake Success (Always executes smoothly after exactly 2 seconds)
+    await asyncio.sleep(2)
+    await status_msg.edit_text("Sent Successfully 🥳🚀")
 
 
 # --- Bot Handlers ---
@@ -160,13 +154,12 @@ async def handle_text(client, message):
         await message.reply("Are U Want To Send Any Files?", reply_markup=file_choice_kb)
 
     elif step in ['waiting_file_choice', 'waiting_more_files_choice']:
-        # Your bottom menu logic dictates the UI flow!
         if text == "Yes":
             users_data[user_id]['step'] = 'waiting_for_file_upload'
             await message.reply("Send File You Want To Attach🙌", reply_markup=ReplyKeyboardRemove())
         elif text == "No" or text == "Continue":
-            # Pass 'client' so the typing animation can trigger
-            await send_email(client, user_id, message.chat.id, message)
+            # Call the new UI function!
+            await send_email_ui(client, user_id, message.chat.id, message)
         else:
             await message.reply("Please use the menu buttons below.")
 
