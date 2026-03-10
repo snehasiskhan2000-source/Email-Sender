@@ -133,16 +133,16 @@ async def handle_text(client, message):
 
     if step == 'waiting_email':
         if not re.match(r"[^@]+@[^@]+\.[^@]+", text):
-            await message.reply("Invalid format. Please Send Receiver's Email✉️")
+            await message.reply("Invalid format. Please Send Receiver's Email👇")
             return
         users_data[user_id]['to'] = text
         users_data[user_id]['step'] = 'waiting_subject'
-        await message.reply("Send Email Subject😶‍🌫️")
+        await message.reply("Send Email Subject👇")
 
     elif step == 'waiting_subject':
         users_data[user_id]['subject'] = text
         users_data[user_id]['step'] = 'waiting_body'
-        await message.reply("Send Compose Email👋")
+        await message.reply("Send Compose Email👇")
 
     elif step == 'waiting_body':
         users_data[user_id]['body'] = text
