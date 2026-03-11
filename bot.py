@@ -116,10 +116,33 @@ async def start_command(client, message):
     user_id = message.from_user.id
     reset_user(user_id)
     users_data[user_id] = {'step': 'waiting_email', 'files': []}
-    await message.reply(
-        "Send Receiver's Email🫣", 
-        reply_markup=ReplyKeyboardRemove()
+    
+    caption_text = (
+        "Welcome to **Premium Mailer** 💀\n\n"
+        "The most advanced, secure, and seamless email dispatcher on Telegram.\n\n"
+        "Send Receiver's Email ✉️"
     )
+    
+    try:
+        # We try to send the photo WITH the massive Fire Explosion effect! 🔥
+        await message.reply_photo(
+            photo="welcome.jpg",
+            caption=caption_text,
+            reply_markup=ReplyKeyboardRemove(),
+            effect_id="5104815315077505950" 
+        )
+    except TypeError:
+        # Fallback: If your Pyrogram version is slightly older and rejects the effect_id
+        await message.reply_photo(
+            photo="welcome.jpg",
+            caption=caption_text,
+            reply_markup=ReplyKeyboardRemove()
+        )
+    except Exception as e:
+        # Absolute fallback: If you forgot to upload 'welcome.jpg' to GitHub!
+        print(f"Image Error: {e}")
+        await message.reply(caption_text, reply_markup=ReplyKeyboardRemove())
+
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
@@ -133,16 +156,16 @@ async def handle_text(client, message):
 
     if step == 'waiting_email':
         if not re.match(r"[^@]+@[^@]+\.[^@]+", text):
-            await message.reply("Invalid format. Please Send Receiver's Email👇")
+            await message.reply("Invalid format. Please Send Receiver's Email✉️")
             return
         users_data[user_id]['to'] = text
         users_data[user_id]['step'] = 'waiting_subject'
-        await message.reply("Send Email Subject👇")
+        await message.reply("Send Email Subject😶‍🌫️")
 
     elif step == 'waiting_subject':
         users_data[user_id]['subject'] = text
         users_data[user_id]['step'] = 'waiting_body'
-        await message.reply("Send Compose Email👇")
+        await message.reply("Send Compose Email👋")
 
     elif step == 'waiting_body':
         users_data[user_id]['body'] = text
@@ -202,3 +225,4 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
+    
