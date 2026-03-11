@@ -2,7 +2,7 @@ import os
 import asyncio
 import re
 import base64
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters, idle, enums
 from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 import aiohttp
 from aiohttp import web
@@ -114,6 +114,7 @@ async def send_email_ui(user_id, message):
 @app.on_message(filters.command("start") & filters.private)
 async def start_command(client, message):
     user_id = message.from_user.id
+    chat_id = message.chat.id
     reset_user(user_id)
     users_data[user_id] = {'step': 'waiting_email', 'files': []}
     
@@ -124,26 +125,35 @@ async def start_command(client, message):
     )
     
     try:
-        # Try to blast the fire effect 🔥
-        await message.reply_photo(
-            photo="welcome.jpg",
-            caption=caption_text,
-            reply_markup=ReplyKeyboardRemove(),
-            effect_id="5104815315077505950" 
-        )
-    except TypeError:
-        # 🛟 BULLETPROOF FALLBACK: If Render is still using the old cached engine, 
-        # just send the premium photo normally so the bot never goes offline!
-        await message.reply_photo(
-            photo="welcome.jpg",
-            caption=caption_text,
-            reply_markup=ReplyKeyboardRemove()
-        )
+        # Trigger typing animation instantly to mask the upload delay
+        await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
+        
+        # 🪄 The Official Telegram API Endpoint Hack
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
+        
+        form = aiohttp.FormData()
+        form.add_field('chat_id', str(chat_id))
+        form.add_field('caption', caption_text)
+        form.add_field('parse_mode', 'Markdown')
+        
+        # 🔥 THE CRITICAL FIX: The official parameter name
+        form.add_field('message_effect_id', '5104815315077505950') 
+        
+        # Safely open and attach the image file
+        with open('welcome.jpg', 'rb') as f:
+            form.add_field('photo', f, filename='welcome.jpg')
+            
+            # Fire the HTTP request directly to Telegram
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, data=form) as resp:
+                    if resp.status != 200:
+                        print(f"API Error: {await resp.text()}")
+                        # Absolute worst-case fallback
+                        await message.reply_photo(photo="welcome.jpg", caption=caption_text, reply_markup=ReplyKeyboardRemove())
+    
     except Exception as e:
-        # If the image file is missing entirely, send text only
-        print(f"Image Error: {e}")
+        print(f"Direct API Error: {e}")
         await message.reply(caption_text, reply_markup=ReplyKeyboardRemove())
-
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
