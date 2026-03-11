@@ -123,26 +123,13 @@ async def start_command(client, message):
         "Send Receiver's Email ✉️"
     )
     
-    try:
-        # We try to send the photo WITH the massive Fire Explosion effect! 🔥
-        await message.reply_photo(
-            photo="welcome.jpg",
-            caption=caption_text,
-            reply_markup=ReplyKeyboardRemove(),
-            effect_id="5104815315077505950" 
-        )
-    except TypeError:
-        # Fallback: If your Pyrogram version is slightly older and rejects the effect_id
-        await message.reply_photo(
-            photo="welcome.jpg",
-            caption=caption_text,
-            reply_markup=ReplyKeyboardRemove()
-        )
-    except Exception as e:
-        # Absolute fallback: If you forgot to upload 'welcome.jpg' to GitHub!
-        print(f"Image Error: {e}")
-        await message.reply(caption_text, reply_markup=ReplyKeyboardRemove())
-
+    # Using Pyrofork, this will now blast the fire effect flawlessly 🔥
+    await message.reply_photo(
+        photo="welcome.jpg",
+        caption=caption_text,
+        reply_markup=ReplyKeyboardRemove(),
+        effect_id="5104815315077505950" 
+    )
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
