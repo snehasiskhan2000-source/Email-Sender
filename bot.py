@@ -2,6 +2,7 @@ import os
 import asyncio
 import re
 import base64
+import json
 from pyrogram import Client, filters, idle, enums
 from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 import aiohttp
@@ -22,6 +23,11 @@ app = Client("premium_mailer_bot", api_id=API_ID, api_hash=API_HASH, bot_token=B
 users_data = {}
 
 # --- Keyboards ---
+start_kb = ReplyKeyboardMarkup(
+    [[KeyboardButton("START👾")]], 
+    resize_keyboard=True
+)
+
 file_choice_kb = ReplyKeyboardMarkup(
     [[KeyboardButton("Yes"), KeyboardButton("No, Continue")]], 
     resize_keyboard=True, placeholder="Attach a file?"
@@ -115,13 +121,19 @@ async def send_email_ui(user_id, message):
 async def start_command(client, message):
     user_id = message.from_user.id
     chat_id = message.chat.id
+    
+    # 🪄 DELETE THE /start COMMAND INSTANTLY FROM BOTH SIDES
+    try:
+        await message.delete()
+    except Exception:
+        pass
+        
     reset_user(user_id)
-    users_data[user_id] = {'step': 'waiting_email', 'files': []}
+    users_data[user_id] = {'step': 'waiting_start_button', 'files': []}
     
     caption_text = (
         "Welcome to **Premium Mailer** 💀\n\n"
-        "The most advanced, secure, and seamless email dispatcher on Telegram.\n\n"
-        "Send Receiver's Email ✉️"
+        "The most advanced, secure, and seamless email dispatcher on Telegram."
     )
     
     try:
@@ -135,7 +147,13 @@ async def start_command(client, message):
         form.add_field('chat_id', str(chat_id))
         form.add_field('caption', caption_text)
         form.add_field('parse_mode', 'Markdown')
-        form.add_field('reply_markup', '{"remove_keyboard":true}') # Forces the keyboard to hide
+        
+        # Injecting the Custom "START" Button into the raw API call
+        markup = json.dumps({
+            "keyboard": [[{"text": "START👾"}]],
+            "resize_keyboard": True
+        })
+        form.add_field('reply_markup', markup)
         
         # 🔥 THE ACTUAL, CORRECT FIRE EFFECT ID!
         form.add_field('message_effect_id', '5104841245755180586') 
@@ -149,12 +167,12 @@ async def start_command(client, message):
                 async with session.post(url, data=form) as resp:
                     if resp.status != 200:
                         print(f"API Error: {await resp.text()}")
-                        # Absolute worst-case fallback
-                        await message.reply_photo(photo="welcome.jpg", caption=caption_text, reply_markup=ReplyKeyboardRemove())
+                        # Absolute worst-case fallback (using client.send_photo since the trigger message is deleted)
+                        await client.send_photo(chat_id=chat_id, photo="welcome.jpg", caption=caption_text, reply_markup=start_kb)
     
     except Exception as e:
         print(f"Direct API Error: {e}")
-        await message.reply(caption_text, reply_markup=ReplyKeyboardRemove())
+        await client.send_message(chat_id=chat_id, text=caption_text, reply_markup=start_kb)
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
@@ -165,8 +183,15 @@ async def handle_text(client, message):
         return
 
     step = users_data[user_id]['step']
+    
+    if step == 'waiting_start_button':
+        if text == "START👾":
+            users_data[user_id]['step'] = 'waiting_email'
+            await message.reply("Send Receiver's Email 👋", reply_markup=ReplyKeyboardRemove())
+        else:
+            await message.reply("Please tap the **START👾** button below.", reply_markup=start_kb)
 
-    if step == 'waiting_email':
+    elif step == 'waiting_email':
         if not re.match(r"[^@]+@[^@]+\.[^@]+", text):
             await message.reply("Invalid format. Please Send Receiver's Email✉️")
             return
@@ -237,4 +262,4 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
-    
+            
