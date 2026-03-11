@@ -123,13 +123,27 @@ async def start_command(client, message):
         "Send Receiver's Email ✉️"
     )
     
-    # Using Pyrofork, this will now blast the fire effect flawlessly 🔥
-    await message.reply_photo(
-        photo="welcome.jpg",
-        caption=caption_text,
-        reply_markup=ReplyKeyboardRemove(),
-        effect_id="5104815315077505950" 
-    )
+    try:
+        # Try to blast the fire effect 🔥
+        await message.reply_photo(
+            photo="welcome.jpg",
+            caption=caption_text,
+            reply_markup=ReplyKeyboardRemove(),
+            effect_id="5104815315077505950" 
+        )
+    except TypeError:
+        # 🛟 BULLETPROOF FALLBACK: If Render is still using the old cached engine, 
+        # just send the premium photo normally so the bot never goes offline!
+        await message.reply_photo(
+            photo="welcome.jpg",
+            caption=caption_text,
+            reply_markup=ReplyKeyboardRemove()
+        )
+    except Exception as e:
+        # If the image file is missing entirely, send text only
+        print(f"Image Error: {e}")
+        await message.reply(caption_text, reply_markup=ReplyKeyboardRemove())
+
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
