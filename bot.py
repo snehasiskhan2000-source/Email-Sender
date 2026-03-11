@@ -135,9 +135,10 @@ async def start_command(client, message):
         form.add_field('chat_id', str(chat_id))
         form.add_field('caption', caption_text)
         form.add_field('parse_mode', 'Markdown')
+        form.add_field('reply_markup', '{"remove_keyboard":true}') # Forces the keyboard to hide
         
-        # 🔥 THE CRITICAL FIX: The official parameter name
-        form.add_field('message_effect_id', '5104815315077505950') 
+        # 🔥 THE ACTUAL, CORRECT FIRE EFFECT ID!
+        form.add_field('message_effect_id', '5104841245755180586') 
         
         # Safely open and attach the image file
         with open('welcome.jpg', 'rb') as f:
