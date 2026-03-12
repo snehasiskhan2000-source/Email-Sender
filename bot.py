@@ -17,7 +17,8 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "noreply@mailbot.techbittu.in")
 EMAIL_API_KEY = os.environ.get("EMAIL_API_KEY") 
 
-app = Client("premium_mailer_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# 🪄 THE MAGIC FIX: in_memory=True forces a fresh connection, bypassing ghost IPs!
+app = Client("premium_mailer_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN, in_memory=True)
 
 # State management dictionary
 users_data = {}
@@ -125,26 +126,29 @@ async def send_email_ui(user_id, message):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         
-        payload = {
-            "chat_id": str(chat_id),
-            "text": success_text,
-            "parse_mode": "HTML",
-            "message_effect_id": "5046509860389126442", # 🎉 THE PARTY POPPER CONFETTI ID
-            "reply_markup": {
-                "keyboard": [[{"text": "Send Another Email 🌚"}]],
-                "resize_keyboard": True
-            }
-        }
+        # Using FormData to perfectly mimic the working /start command
+        form = aiohttp.FormData()
+        form.add_field('chat_id', str(chat_id))
+        form.add_field('text', success_text)
+        form.add_field('parse_mode', 'HTML')
+        form.add_field('message_effect_id', '5046509860389126442') # 🎉 THE PARTY POPPER CONFETTI ID
+        
+        markup = json.dumps({
+            "keyboard": [[{"text": "Send Another Email 🌚"}]],
+            "resize_keyboard": True
+        })
+        form.add_field('reply_markup', markup)
         
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload) as resp:
+            async with session.post(url, data=form) as resp:
                 if resp.status != 200:
                     print(f"API Error: {await resp.text()}")
-                    await message.reply(success_text, reply_markup=restart_kb)
+                    # Fallback using native Pyrofork effects
+                    await message.reply(success_text, reply_markup=restart_kb, effect_id="5046509860389126442")
                     
     except Exception as e:
         print(f"Direct API Error: {e}")
-        await message.reply(success_text, reply_markup=restart_kb)
+        await message.reply(success_text, reply_markup=restart_kb, effect_id="5046509860389126442")
 
 
 # --- Bot Handlers ---
@@ -295,4 +299,3 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
-    
