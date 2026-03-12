@@ -38,6 +38,11 @@ more_files_kb = ReplyKeyboardMarkup(
     resize_keyboard=True, placeholder="Attach another?"
 )
 
+restart_kb = ReplyKeyboardMarkup(
+    [[KeyboardButton("Send Another Email 🌚")]], 
+    resize_keyboard=True
+)
+
 # --- Helper Functions ---
 def reset_user(user_id):
     if user_id in users_data:
@@ -110,9 +115,35 @@ async def send_email_ui(user_id, message):
     # 1. Instantly throw the API work to the background
     asyncio.create_task(dispatch_email_background(user_id, data.copy()))
     
-    # 2. Skip the "Sending..." message entirely!
-    # Instantly drop the success message and remove the keyboard.
-    await message.reply("<b>Sent Successfully 🥳🚀</b>", reply_markup=ReplyKeyboardRemove())
+    # 2. The Confetti API Hack 🎉
+    chat_id = message.chat.id
+    success_text = "<b>Sent Successfully 🥳🚀</b>"
+    
+    try:
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        
+        # Sending JSON payload is cleaner for text-only direct API calls
+        payload = {
+            "chat_id": str(chat_id),
+            "text": success_text,
+            "parse_mode": "HTML",
+            "message_effect_id": "5046509860389126442", # 🎉 THE PARTY POPPER CONFETTI ID
+            "reply_markup": {
+                "keyboard": [[{"text": "Send Another Email 🌚"}]],
+                "resize_keyboard": True
+            }
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload) as resp:
+                if resp.status != 200:
+                    print(f"API Error: {await resp.text()}")
+                    # Fallback if the API acts up
+                    await message.reply(success_text, reply_markup=restart_kb)
+                    
+    except Exception as e:
+        print(f"Direct API Error: {e}")
+        await message.reply(success_text, reply_markup=restart_kb)
 
 
 # --- Bot Handlers ---
@@ -148,26 +179,24 @@ async def start_command(client, message):
         form.add_field('caption', caption_text)
         form.add_field('parse_mode', 'Markdown')
         
-        # Injecting the Custom "START" Button into the raw API call
+        # Injecting the Custom "START" Button
         markup = json.dumps({
             "keyboard": [[{"text": "START👾"}]],
             "resize_keyboard": True
         })
         form.add_field('reply_markup', markup)
         
-        # 🔥 THE ACTUAL, CORRECT FIRE EFFECT ID!
+        # 🔥 THE ACTUAL, CORRECT FIRE EFFECT ID
         form.add_field('message_effect_id', '5104841245755180586') 
         
         # Safely open and attach the image file
         with open('welcome.jpg', 'rb') as f:
             form.add_field('photo', f, filename='welcome.jpg')
             
-            # Fire the HTTP request directly to Telegram
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, data=form) as resp:
                     if resp.status != 200:
                         print(f"API Error: {await resp.text()}")
-                        # Absolute worst-case fallback (using client.send_photo since the trigger message is deleted)
                         await client.send_photo(chat_id=chat_id, photo="welcome.jpg", caption=caption_text, reply_markup=start_kb)
     
     except Exception as e:
@@ -178,6 +207,13 @@ async def start_command(client, message):
 async def handle_text(client, message):
     user_id = message.from_user.id
     text = message.text
+    
+    # 🔁 Instantly catch the "Send Another Email" button even if user_data was cleared!
+    if text == "Send Another Email 🌚":
+        reset_user(user_id)
+        users_data[user_id] = {'step': 'waiting_email', 'files': []}
+        await message.reply("Send Receiver's Email 👋", reply_markup=ReplyKeyboardRemove())
+        return
     
     if user_id not in users_data:
         return
@@ -262,4 +298,4 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
-            
+    
