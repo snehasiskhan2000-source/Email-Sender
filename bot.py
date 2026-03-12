@@ -126,12 +126,11 @@ async def send_email_ui(user_id, message):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         
-        # Using FormData to perfectly mimic the working /start command
         form = aiohttp.FormData()
         form.add_field('chat_id', str(chat_id))
         form.add_field('text', success_text)
         form.add_field('parse_mode', 'HTML')
-        form.add_field('message_effect_id', '5046509860389126442') # 🎉 THE PARTY POPPER CONFETTI ID
+        form.add_field('message_effect_id', '5046509860389126442') 
         
         markup = json.dumps({
             "keyboard": [[{"text": "Send Another Email 🌚"}]],
@@ -143,7 +142,6 @@ async def send_email_ui(user_id, message):
             async with session.post(url, data=form) as resp:
                 if resp.status != 200:
                     print(f"API Error: {await resp.text()}")
-                    # Fallback using native Pyrofork effects
                     await message.reply(success_text, reply_markup=restart_kb, effect_id="5046509860389126442")
                     
     except Exception as e:
@@ -158,6 +156,9 @@ async def start_command(client, message):
     user_id = message.from_user.id
     chat_id = message.chat.id
     
+    # 🪄 Get the user's name dynamically! Fallback to 'User' if they don't have one.
+    user_name = message.from_user.first_name or "User"
+    
     try:
         await message.delete()
     except Exception:
@@ -166,9 +167,11 @@ async def start_command(client, message):
     reset_user(user_id)
     users_data[user_id] = {'step': 'waiting_start_button', 'files': []}
     
+    # 🪄 The New HTML Blockquote Formatting!
     caption_text = (
-        "Welcome to **Premium Mailer** 💀\n\n"
-        "The most advanced, secure, and seamless email dispatcher on Telegram."
+        f"⚡𝙃𝙀𝙔, {user_name}\n\n"
+        "<blockquote>𝖂𝖊𝖑𝖈𝖔𝖒𝖊 𝕿𝖔 𝕻𝖗𝖊𝖒𝖎𝖚𝖒 𝕸𝖆𝖎𝖑𝖊𝖗 💀\n"
+        "𝕿𝖍𝖊 𝕸𝖔𝖘𝖙 𝕬𝖉𝖛𝖆𝖓𝖈𝖊𝖉,𝕾𝖊𝖈𝖚𝖗𝖊 𝕬𝖓𝖉 𝕾𝖊𝖆𝖒𝖑𝖊𝖘𝖘 𝕰𝖒𝖆𝖎𝖑 𝕯𝖎𝖘𝖕𝖆𝖙𝖈𝖍𝖊𝖗 𝕺𝖓 𝕿𝖊𝖑𝖊𝖌𝖗𝖆𝖒.</blockquote>"
     )
     
     try:
@@ -179,7 +182,7 @@ async def start_command(client, message):
         form = aiohttp.FormData()
         form.add_field('chat_id', str(chat_id))
         form.add_field('caption', caption_text)
-        form.add_field('parse_mode', 'Markdown')
+        form.add_field('parse_mode', 'HTML') # Switched to HTML to support the quote block!
         
         markup = json.dumps({
             "keyboard": [[{"text": "START👾"}]],
@@ -194,10 +197,10 @@ async def start_command(client, message):
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, data=form) as resp:
                     if resp.status != 200:
-                        await client.send_photo(chat_id=chat_id, photo="welcome.jpg", caption=caption_text, reply_markup=start_kb)
+                        await client.send_photo(chat_id=chat_id, photo="welcome.jpg", caption=caption_text, parse_mode=enums.ParseMode.HTML, reply_markup=start_kb)
     
     except Exception as e:
-        await client.send_message(chat_id=chat_id, text=caption_text, reply_markup=start_kb)
+        await client.send_message(chat_id=chat_id, text=caption_text, parse_mode=enums.ParseMode.HTML, reply_markup=start_kb)
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
@@ -228,7 +231,6 @@ async def handle_text(client, message):
             return
         users_data[user_id]['to'] = text
         
-        # 🪄 ASK FOR THE SENDER'S NAME NEXT!
         users_data[user_id]['step'] = 'waiting_name'
         await message.reply("What's Your Name? 📛")
 
