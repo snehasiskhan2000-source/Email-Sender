@@ -120,7 +120,7 @@ async def send_email_ui(user_id, message):
     
     # 2. The Confetti API Hack 🎉
     chat_id = message.chat.id
-    success_text = "<b>EMAIL SENT SUCCESSFULLY 🥳🚀</b>"
+    success_text = "<b> 𝐄𝐌𝐀𝐈𝐋  𝐒𝐄𝐍𝐓  𝐒𝐔𝐂𝐂𝐄𝐒𝐒𝐅𝐔𝐋𝐋𝐘 🥳🚀</b>"
     
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
