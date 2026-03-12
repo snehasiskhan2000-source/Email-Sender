@@ -46,6 +46,7 @@ restart_kb = ReplyKeyboardMarkup(
 # --- Helper Functions ---
 def reset_user(user_id):
     if user_id in users_data:
+        # Clean up local files to save disk space
         for file in users_data[user_id].get('files', []):
             if os.path.exists(file):
                 try:
@@ -56,14 +57,16 @@ def reset_user(user_id):
 
 # --- The Hidden Background Engine ---
 async def dispatch_email_background(user_id, data):
-    """This runs silently in the background."""
+    """This runs silently in the background. The UI doesn't wait for it!"""
     try:
         attachments = []
         for file_path in data.get('files', []):
             if not os.path.exists(file_path):
                 continue
             
+            # 15MB Safety check
             if os.path.getsize(file_path) > 15 * 1024 * 1024:
+                print(f"File too large to send for user {user_id}")
                 return 
                 
             file_name = os.path.basename(file_path)
@@ -71,6 +74,7 @@ async def dispatch_email_background(user_id, data):
                 encoded_string = base64.b64encode(f.read()).decode("utf-8")
                 attachments.append({"name": file_name, "content": encoded_string})
 
+        # 🪄 DYNAMIC SENDER NAME INJECTED HERE
         sender_name = data.get('sender_name', 'Premium Mailer')
         
         payload = {
@@ -101,57 +105,46 @@ async def dispatch_email_background(user_id, data):
     except Exception as e:
         print(f"Background Engine Error: {e}")
     finally:
+        # Delete the files after sending
         reset_user(user_id)
 
 
-# --- The UI Controller (The Magic Animation) ---
-async def send_email_ui(client, user_id, message):
+# --- The UI Controller ---
+async def send_email_ui(user_id, message):
     data = users_data.get(user_id)
     if not data:
         return
     
-    chat_id = message.chat.id
-    history = data.get('history', [])
-    
-    # 1. Throw email task to background
+    # 1. Instantly throw the API work to the background
     asyncio.create_task(dispatch_email_background(user_id, data.copy()))
     
-    # 2. THE CASCADING ANIMATION: Edit all bot prompts to 🎉 rapidly
-    for msg_id in history:
-        try:
-            # Only bot messages will successfully edit, user messages fail silently
-            await client.edit_message_text(chat_id, msg_id, "🎉")
-            await asyncio.sleep(0.05) 
-        except:
-            pass
-
-    # 3. Drop the Confetti Bomb API Hack
-    success_text = "<b>Sent Successfully 🥳🚀</b>"
+    # 2. The Confetti API Hack 🎉
+    chat_id = message.chat.id
+    success_text = "<b>EMAIL SENT SUCCESSFULLY 🥳🚀</b>"
+    
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+        
         payload = {
             "chat_id": str(chat_id),
             "text": success_text,
             "parse_mode": "HTML",
-            "message_effect_id": "5046509860389126442", # 🎉 CONFETTI ID
+            "message_effect_id": "5046509860389126442", # 🎉 THE PARTY POPPER CONFETTI ID
             "reply_markup": {
                 "keyboard": [[{"text": "Send Another Email 🌚"}]],
                 "resize_keyboard": True
             }
         }
+        
         async with aiohttp.ClientSession() as session:
-            await session.post(url, json=payload)
-    except:
-        await message.reply(success_text, reply_markup=restart_kb)
-
-    # 4. Wait 2 seconds for the user to admire the fireworks...
-    await asyncio.sleep(2)
-    
-    # 5. NUKE THE HISTORY! Clean the screen entirely.
-    try:
-        await client.delete_messages(chat_id, history)
+            async with session.post(url, json=payload) as resp:
+                if resp.status != 200:
+                    print(f"API Error: {await resp.text()}")
+                    await message.reply(success_text, reply_markup=restart_kb)
+                    
     except Exception as e:
-        print(f"Cleanup Error: {e}")
+        print(f"Direct API Error: {e}")
+        await message.reply(success_text, reply_markup=restart_kb)
 
 
 # --- Bot Handlers ---
@@ -167,8 +160,7 @@ async def start_command(client, message):
         pass
         
     reset_user(user_id)
-    # Initialize the history tracker!
-    users_data[user_id] = {'step': 'waiting_start_button', 'files': [], 'history': []}
+    users_data[user_id] = {'step': 'waiting_start_button', 'files': []}
     
     caption_text = (
         "Welcome to **Premium Mailer** 💀\n\n"
@@ -177,6 +169,7 @@ async def start_command(client, message):
     
     try:
         await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
+        
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
         
         form = aiohttp.FormData()
@@ -193,82 +186,71 @@ async def start_command(client, message):
         
         with open('welcome.jpg', 'rb') as f:
             form.add_field('photo', f, filename='welcome.jpg')
+            
             async with aiohttp.ClientSession() as session:
-                await session.post(url, data=form)
-    except Exception:
-        await client.send_photo(chat_id=chat_id, photo="welcome.jpg", caption=caption_text, reply_markup=start_kb)
+                async with session.post(url, data=form) as resp:
+                    if resp.status != 200:
+                        await client.send_photo(chat_id=chat_id, photo="welcome.jpg", caption=caption_text, reply_markup=start_kb)
+    
+    except Exception as e:
+        await client.send_message(chat_id=chat_id, text=caption_text, reply_markup=start_kb)
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
     user_id = message.from_user.id
     text = message.text
     
-    # 🔁 RESTART LOGIC
     if text == "Send Another Email 🌚":
         reset_user(user_id)
-        users_data[user_id] = {'step': 'waiting_email', 'files': [], 'history': []}
-        try:
-            await message.delete()
-        except:
-            pass
-        m = await message.reply("Send Receiver's Email 👋", reply_markup=ReplyKeyboardRemove())
-        users_data[user_id]['history'].append(m.id)
+        users_data[user_id] = {'step': 'waiting_email', 'files': []}
+        await message.reply("Send Receiver's Email 👋", reply_markup=ReplyKeyboardRemove())
         return
     
     if user_id not in users_data:
         return
 
-    # Track user's message
-    users_data[user_id]['history'].append(message.id)
     step = users_data[user_id]['step']
     
     if step == 'waiting_start_button':
         if text == "START👾":
             users_data[user_id]['step'] = 'waiting_email'
-            m = await message.reply("Send Receiver's Email 👋", reply_markup=ReplyKeyboardRemove())
-            users_data[user_id]['history'].append(m.id)
+            await message.reply("Send Receiver's Email 👋", reply_markup=ReplyKeyboardRemove())
         else:
-            m = await message.reply("Please tap the **START👾** button below.", reply_markup=start_kb)
-            users_data[user_id]['history'].append(m.id)
+            await message.reply("Please tap the **START👾** button below.", reply_markup=start_kb)
 
     elif step == 'waiting_email':
         if not re.match(r"[^@]+@[^@]+\.[^@]+", text):
-            m = await message.reply("Invalid format. Please Send Receiver's Email✉️")
-            users_data[user_id]['history'].append(m.id)
+            await message.reply("Invalid format. Please Send Receiver's Email🌚")
             return
         users_data[user_id]['to'] = text
+        
+        # 🪄 ASK FOR THE SENDER'S NAME NEXT!
         users_data[user_id]['step'] = 'waiting_name'
-        m = await message.reply("What's Your Name 📛")
-        users_data[user_id]['history'].append(m.id)
+        await message.reply("What's Your Name? 📛")
 
     elif step == 'waiting_name':
         users_data[user_id]['sender_name'] = text
         users_data[user_id]['step'] = 'waiting_subject'
-        m = await message.reply("Send Email Subject😶‍🌫️")
-        users_data[user_id]['history'].append(m.id)
+        await message.reply("Send Email Subject👀")
 
     elif step == 'waiting_subject':
         users_data[user_id]['subject'] = text
         users_data[user_id]['step'] = 'waiting_body'
-        m = await message.reply("Send Compose Email👋")
-        users_data[user_id]['history'].append(m.id)
+        await message.reply("Send Compose Email👀")
 
     elif step == 'waiting_body':
         users_data[user_id]['body'] = text
         users_data[user_id]['step'] = 'waiting_file_choice'
-        m = await message.reply("Are U Want To Send Any Files?", reply_markup=file_choice_kb)
-        users_data[user_id]['history'].append(m.id)
+        await message.reply("Are U Want To Send Any Files?🤔", reply_markup=file_choice_kb)
 
     elif step in ['waiting_file_choice', 'waiting_more_files_choice']:
         if text == "Yes":
             users_data[user_id]['step'] = 'waiting_for_file_upload'
-            m = await message.reply("Send File You Want To Attach🙌", reply_markup=ReplyKeyboardRemove())
-            users_data[user_id]['history'].append(m.id)
+            await message.reply("Send File You Want To Attach🙌", reply_markup=ReplyKeyboardRemove())
         elif text == "No, Continue":
-            await send_email_ui(client, user_id, message)
+            await send_email_ui(user_id, message)
         else:
-            m = await message.reply("Please use the menu buttons below.")
-            users_data[user_id]['history'].append(m.id)
+            await message.reply("Please use the menu buttons below.")
 
 @app.on_message(filters.media & filters.private)
 async def handle_media(client, message):
@@ -276,18 +258,15 @@ async def handle_media(client, message):
     if user_id not in users_data or users_data[user_id]['step'] != 'waiting_for_file_upload':
         return
 
-    users_data[user_id]['history'].append(message.id)
     status_msg = await message.reply("Downloading attachment... 📥")
-    users_data[user_id]['history'].append(status_msg.id)
     
     try:
         file_path = await message.download()
         users_data[user_id]['files'].append(file_path)
+        
         users_data[user_id]['step'] = 'waiting_more_files_choice'
         await status_msg.delete()
-        
-        m = await message.reply("Are U Want To Attach More Files?", reply_markup=more_files_kb)
-        users_data[user_id]['history'].append(m.id)
+        await message.reply("Are U Want To Attach More Files?🤔", reply_markup=more_files_kb)
     except Exception as e:
         print(f"Download Error: {e}")
         await status_msg.edit_text("Error downloading file. Please try again.")
