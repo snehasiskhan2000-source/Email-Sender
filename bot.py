@@ -170,8 +170,8 @@ async def start_command(client, message):
     # 🪄 The New HTML Blockquote Formatting!
     caption_text = (
         f"⚡𝙃𝙀𝙔, {user_name}\n\n"
-        "<blockquote>𝖂𝖊𝖑𝖈𝖔𝖒𝖊 𝕿𝖔 𝕻𝖗𝖊𝖒𝖎𝖚𝖒 𝕸𝖆𝖎𝖑𝖊𝖗 💀\n"
-        "𝕿𝖍𝖊 𝕸𝖔𝖘𝖙 𝕬𝖉𝖛𝖆𝖓𝖈𝖊𝖉,𝕾𝖊𝖈𝖚𝖗𝖊 𝕬𝖓𝖉 𝕾𝖊𝖆𝖒𝖑𝖊𝖘𝖘 𝕰𝖒𝖆𝖎𝖑 𝕯𝖎𝖘𝖕𝖆𝖙𝖈𝖍𝖊𝖗 𝕺𝖓 𝕿𝖊𝖑𝖊𝖌𝖗𝖆𝖒.</blockquote>"
+        "<blockquote>𝐰𝐞𝐥𝐜𝐨𝐦𝐞 𝐓𝐨 𝐏𝐫𝐞𝐦𝐢𝐮𝐦 𝐌𝐚𝐢𝐥𝐞𝐫 💀\n"
+        "𝐓𝐡𝐞 𝐌𝐨𝐬𝐭 𝐀𝐝𝐯𝐚𝐧𝐜𝐞𝐝,𝐒𝐞𝐜𝐮𝐫𝐞 𝐀𝐧𝐝 𝐒𝐞𝐚𝐦𝐥𝐞𝐬𝐬 𝐄𝐦𝐚𝐢𝐥 𝐃𝐢𝐬𝐩𝐚𝐭𝐜𝐡𝐞𝐫 𝐎𝐧 𝐓𝐞𝐥𝐞𝐠𝐫𝐚𝐦.🧟‍♂️</blockquote>"
     )
     
     try:
