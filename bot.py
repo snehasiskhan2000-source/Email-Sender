@@ -74,8 +74,11 @@ async def dispatch_email_background(user_id, data):
                 encoded_string = base64.b64encode(f.read()).decode("utf-8")
                 attachments.append({"name": file_name, "content": encoded_string})
 
+        # 🪄 DYNAMIC SENDER NAME INJECTED HERE
+        sender_name = data.get('sender_name', 'Premium Mailer')
+        
         payload = {
-            "sender": {"name": "Premium Mailer", "email": SENDER_EMAIL},
+            "sender": {"name": sender_name, "email": SENDER_EMAIL},
             "to": [{"email": data['to']}],
             "subject": data['subject'],
             "textContent": data['body']
@@ -122,7 +125,6 @@ async def send_email_ui(user_id, message):
     try:
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         
-        # Sending JSON payload is cleaner for text-only direct API calls
         payload = {
             "chat_id": str(chat_id),
             "text": success_text,
@@ -138,7 +140,6 @@ async def send_email_ui(user_id, message):
             async with session.post(url, json=payload) as resp:
                 if resp.status != 200:
                     print(f"API Error: {await resp.text()}")
-                    # Fallback if the API acts up
                     await message.reply(success_text, reply_markup=restart_kb)
                     
     except Exception as e:
@@ -153,7 +154,6 @@ async def start_command(client, message):
     user_id = message.from_user.id
     chat_id = message.chat.id
     
-    # 🪄 DELETE THE /start COMMAND INSTANTLY FROM BOTH SIDES
     try:
         await message.delete()
     except Exception:
@@ -168,10 +168,8 @@ async def start_command(client, message):
     )
     
     try:
-        # Trigger typing animation instantly to mask the upload delay
         await client.send_chat_action(chat_id, enums.ChatAction.TYPING)
         
-        # 🪄 The Official Telegram API Endpoint Hack
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
         
         form = aiohttp.FormData()
@@ -179,28 +177,22 @@ async def start_command(client, message):
         form.add_field('caption', caption_text)
         form.add_field('parse_mode', 'Markdown')
         
-        # Injecting the Custom "START" Button
         markup = json.dumps({
             "keyboard": [[{"text": "START👾"}]],
             "resize_keyboard": True
         })
         form.add_field('reply_markup', markup)
-        
-        # 🔥 THE ACTUAL, CORRECT FIRE EFFECT ID
         form.add_field('message_effect_id', '5104841245755180586') 
         
-        # Safely open and attach the image file
         with open('welcome.jpg', 'rb') as f:
             form.add_field('photo', f, filename='welcome.jpg')
             
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, data=form) as resp:
                     if resp.status != 200:
-                        print(f"API Error: {await resp.text()}")
                         await client.send_photo(chat_id=chat_id, photo="welcome.jpg", caption=caption_text, reply_markup=start_kb)
     
     except Exception as e:
-        print(f"Direct API Error: {e}")
         await client.send_message(chat_id=chat_id, text=caption_text, reply_markup=start_kb)
 
 @app.on_message(filters.text & filters.private)
@@ -208,7 +200,6 @@ async def handle_text(client, message):
     user_id = message.from_user.id
     text = message.text
     
-    # 🔁 Instantly catch the "Send Another Email" button even if user_data was cleared!
     if text == "Send Another Email 🌚":
         reset_user(user_id)
         users_data[user_id] = {'step': 'waiting_email', 'files': []}
@@ -232,6 +223,13 @@ async def handle_text(client, message):
             await message.reply("Invalid format. Please Send Receiver's Email✉️")
             return
         users_data[user_id]['to'] = text
+        
+        # 🪄 ASK FOR THE SENDER'S NAME NEXT!
+        users_data[user_id]['step'] = 'waiting_name'
+        await message.reply("What's Your Name 📛")
+
+    elif step == 'waiting_name':
+        users_data[user_id]['sender_name'] = text
         users_data[user_id]['step'] = 'waiting_subject'
         await message.reply("Send Email Subject😶‍🌫️")
 
@@ -250,7 +248,6 @@ async def handle_text(client, message):
             users_data[user_id]['step'] = 'waiting_for_file_upload'
             await message.reply("Send File You Want To Attach🙌", reply_markup=ReplyKeyboardRemove())
         elif text == "No, Continue":
-            # Call the UI function directly!
             await send_email_ui(user_id, message)
         else:
             await message.reply("Please use the menu buttons below.")
@@ -298,4 +295,4 @@ async def main():
 
 if __name__ == "__main__":
     app.run(main())
-    
+        
